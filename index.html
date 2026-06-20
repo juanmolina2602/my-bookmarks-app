@@ -21,6 +21,7 @@
     .theme-toggle { display:inline-flex; align-items:center; gap:8px; min-height:42px; padding:9px 13px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--ink); font-weight:750; cursor:pointer; box-shadow:0 8px 25px var(--shadow); }
     .theme-toggle:hover { border-color:var(--blue); }
     .panel { background:var(--surface); border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:0 16px 50px var(--shadow); backdrop-filter:blur(10px); }
+    main > .panel,main > .tools,main > .filters { display:none; }
     .panel h2 { margin:0 0 17px; font-size:1.08rem; }
     form { display:grid; grid-template-columns:1.1fr 1.35fr .8fr; gap:14px; }
     label { display:grid; gap:7px; color:var(--ink); font-size:.84rem; font-weight:700; }
@@ -40,7 +41,7 @@
     .card { position:relative; display:flex; flex-direction:column; width:100%; scroll-margin-top:120px; overflow:hidden; border:1px solid var(--line); border-radius:22px; background:var(--card); box-shadow:0 12px 35px var(--shadow); transition:transform .22s,box-shadow .22s; }
     .card:hover { transform:translateY(-5px); box-shadow:0 22px 50px #274f8624; }
     .appointment-card { border:0; color:#fff; background:linear-gradient(165deg,#08717ccc,#0b3a55df),url('https://loremflickr.com/900/1100/doctor,appointment?lock=99001') center/cover; }
-    .appointment-card .card-body { min-height:360px; justify-content:flex-end; padding:24px; }
+    .appointment-card .card-body { min-height:clamp(480px,70vh,680px); justify-content:flex-end; padding:30px; }
     .appointment-card .appointment-mark { width:54px; height:54px; display:grid; place-items:center; margin-bottom:auto; border:1px solid #ffffff55; border-radius:16px; background:#ffffff21; font-size:1.7rem; backdrop-filter:blur(8px); }
     .appointment-card h2 { margin:28px 0 8px; font-size:1.65rem; line-height:1.1; }
     .appointment-card p { color:#e9fbff; }
@@ -145,7 +146,7 @@
       {id:crypto.randomUUID(),title:'HIPAA for Professionals',url:'https://www.hhs.gov/hipaa/for-professionals/',category:'Compliance',notes:'Privacy and security guidance for protecting patient information.'},
       {id:crypto.randomUUID(),title:'SwiftCare Team Portal',url:'https://example.com/swiftcare',category:'Operations',notes:'A placeholder for the internal scheduling, matching, and care coordination portal.'}
     ];
-    let bookmarks = load(); let activeCategory = 'All'; let searchTerm = ''; let editingId = null;
+    let bookmarks = load(); let activeCategory = 'All'; let searchTerm = ''; let editingId = null; let activeView = 'home';
     const form=document.querySelector('#bookmarkForm'), grid=document.querySelector('#grid'), filters=document.querySelector('#filters'), count=document.querySelector('#count'), editDialog=document.querySelector('#editDialog'), editForm=document.querySelector('#editForm'), bottomNav=document.querySelector('#bottomNav');
     function load(){ try { const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(saved)?saved:samples; } catch { return samples; } }
     function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(bookmarks)); }
@@ -153,13 +154,20 @@
     function hash(text){ return [...String(text)].reduce((total,char)=>((total*31)+char.charCodeAt(0))>>>0,7); }
     function visualFor(item){
       const text=`${item.title} ${item.category}`.toLowerCase();
+      const specificPhotos={
+        'MedlinePlus — Home Care Services':'https://images.unsplash.com/photo-1576765608866-5b51046452be?auto=format&fit=crop&w=1100&q=86',
+        'HHS Telehealth Resources':'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1100&q=86',
+        'CDC — Older Adult Health':'https://images.unsplash.com/photo-1544006659-f0b21884ce1d?auto=format&fit=crop&w=1100&q=86',
+        'HIPAA for Professionals':'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1100&q=86',
+        'SwiftCare Team Portal':'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1100&q=86'
+      };
       const topics=[['telehealth','virtual'],['patient','care','health'],['wellness','nature'],['older','elderly','senior'],['hipaa','privacy','compliance','security'],['operation','team','schedule'],['design','creative'],['develop','code','github'],['read','book']];
       const match=topics.find(words=>words.some(word=>text.includes(word)));
       let domain='Saved resource'; try{domain=new URL(item.url).hostname.replace(/^www\./,'')}catch{}
       const value=hash(`${item.title}${item.category}`);
       const topic=encodeURIComponent(match?match.slice(0,2).join(','):'useful,resource');
       const uniqueLock=hash(item.id||`${item.title}${item.url}`);
-      return {photo:`https://loremflickr.com/900/900/${topic}?lock=${uniqueLock}`,domain,height:160+(value%4)*34};
+      return {photo:specificPhotos[item.title]||`https://loremflickr.com/900/900/${topic}?lock=${uniqueLock}`,domain,height:160+(value%4)*34};
     }
     function navIconFor(item){const text=`${item.title} ${item.category}`.toLowerCase();if(text.includes('telehealth'))return'⌁';if(text.includes('wellness')||text.includes('older'))return'♡';if(text.includes('hipaa')||text.includes('compliance'))return'◇';if(text.includes('operation'))return'☷';if(text.includes('care')||text.includes('patient'))return'✚';return item.title.trim().charAt(0).toUpperCase()||'•'}
     function render(){
@@ -168,21 +176,22 @@
       filters.innerHTML=['All',...categories].map(c=>`<button class="filter ${c===activeCategory?'active':''}" data-category="${esc(c)}">${esc(c)}</button>`).join('');
       document.querySelector('#categoryOptions').innerHTML=categories.map(c=>`<option value="${esc(c)}">`).join('');
       const q=searchTerm.trim().toLowerCase();
-      const visible=bookmarks.filter(b=>(activeCategory==='All'||b.category===activeCategory)&&(!q||b.title.toLowerCase().includes(q)||b.category.toLowerCase().includes(q)));
-      count.textContent=`${bookmarks.length} resource${bookmarks.length===1?'':'s'}`;
-      const showAppointment=activeCategory==='All'&&(!q||'book appointment healthcare visit'.includes(q));
+      if(activeView!=='home'&&!bookmarks.some(b=>b.id===activeView))activeView='home';
+      const visible=activeView==='home'?[]:bookmarks.filter(b=>b.id===activeView);
+      count.textContent=activeView==='home'?'Appointments':visible[0]?.category||'Resource';
+      const showAppointment=activeView==='home';
       const appointmentCard=showAppointment?`<article class="card appointment-card" id="appointment-card"><div class="card-body"><div class="appointment-mark" aria-hidden="true">＋</div><span class="tag">Appointments</span><h2>Ready to schedule care?</h2><p>Request primary care, post-surgery follow-up, chronic care, telehealth, or an elderly wellness check.</p><button class="book-button" type="button" data-book-appointment>Book an appointment</button></div></article>`:'';
       const resourceCards=visible.map(b=>{const v=visualFor(b);return `<article class="card" id="bookmark-${esc(b.id)}"><div class="cover" style="--cover-height:${Math.max(v.height,300)}px;--cover-image:url('${esc(v.photo)}')"><span class="domain-chip">${esc(v.domain)}</span></div><div class="card-body"><div class="cardtop"><span class="tag">${esc(b.category)}</span><div class="card-actions"><button class="edit" data-edit="${esc(b.id)}" aria-label="Edit ${esc(b.title)}" title="Edit">✎ Edit</button><button class="delete" data-delete="${esc(b.id)}" aria-label="Delete ${esc(b.title)}" title="Delete">✕</button></div></div><h3>${esc(b.title)}</h3><div class="url">${esc(b.url)}</div>${b.notes?`<p>${esc(b.notes)}</p>`:'<p>No notes added yet.</p>'}<a class="visit" href="${esc(b.url)}" target="_blank" rel="noopener noreferrer">Open resource →</a></div></article>`}).join('');
       grid.innerHTML=appointmentCard+resourceCards||`<div class="empty"><strong>No resources found</strong>Try another search or category.</div>`;
-      bottomNav.innerHTML=`<button class="nav-tab active" type="button" data-nav="home"><span class="nav-icon">⌂</span><span class="nav-label">Home</span></button><button class="nav-tab" type="button" data-nav="appointment"><span class="nav-icon">＋</span><span class="nav-label">Book</span></button>${bookmarks.map(b=>`<button class="nav-tab" type="button" data-nav-bookmark="${esc(b.id)}" title="${esc(b.title)}"><span class="nav-icon">${esc(navIconFor(b))}</span><span class="nav-label">${esc(b.title)}</span></button>`).join('')}`;
+      bottomNav.innerHTML=`<button class="nav-tab ${activeView==='home'?'active':''}" type="button" data-nav="home"><span class="nav-icon">⌂</span><span class="nav-label">Home</span></button>${bookmarks.map(b=>`<button class="nav-tab ${activeView===b.id?'active':''}" type="button" data-nav-bookmark="${esc(b.id)}" title="${esc(b.title)}"><span class="nav-icon">${esc(navIconFor(b))}</span><span class="nav-label">${esc(b.title)}</span></button>`).join('')}`;
     }
-    form.addEventListener('submit',e=>{ e.preventDefault(); const data={id:crypto.randomUUID(),title:document.querySelector('#title').value.trim(),url:document.querySelector('#url').value.trim(),category:document.querySelector('#category').value.trim(),notes:document.querySelector('#notes').value.trim()}; if(!data.title||!data.url||!data.category)return; bookmarks.unshift(data); save(); form.reset(); activeCategory='All'; searchTerm=''; document.querySelector('#search').value=''; render(); });
+    form.addEventListener('submit',e=>{ e.preventDefault(); const data={id:crypto.randomUUID(),title:document.querySelector('#title').value.trim(),url:document.querySelector('#url').value.trim(),category:document.querySelector('#category').value.trim(),notes:document.querySelector('#notes').value.trim()}; if(!data.title||!data.url||!data.category)return; bookmarks.unshift(data); activeView=data.id; save(); form.reset(); activeCategory='All'; searchTerm=''; document.querySelector('#search').value=''; render(); });
     document.querySelector('#search').addEventListener('input',e=>{searchTerm=e.target.value;render()});
     filters.addEventListener('click',e=>{const button=e.target.closest('[data-category]');if(button){activeCategory=button.dataset.category;render()}});
     function openEditor(id){ const item=bookmarks.find(b=>b.id===id); if(!item)return; editingId=id; document.querySelector('#editTitle').value=item.title; document.querySelector('#editUrl').value=item.url; document.querySelector('#editCategory').value=item.category; document.querySelector('#editNotes').value=item.notes||''; editDialog.showModal(); }
     function closeEditor(){ editDialog.close(); editingId=null; editForm.reset(); }
-    grid.addEventListener('click',e=>{const appointmentButton=e.target.closest('[data-book-appointment]');if(appointmentButton){document.querySelector('#appointmentDialog').showModal();return}const editButton=e.target.closest('[data-edit]');if(editButton){openEditor(editButton.dataset.edit);return}const deleteButton=e.target.closest('[data-delete]');if(deleteButton&&confirm('Delete this resource?')){bookmarks=bookmarks.filter(b=>b.id!==deleteButton.dataset.delete);save();render()}});
-    bottomNav.addEventListener('click',e=>{const tab=e.target.closest('.nav-tab');if(!tab)return;bottomNav.querySelectorAll('.nav-tab').forEach(button=>button.classList.remove('active'));tab.classList.add('active');if(tab.dataset.nav==='home'){scrollTo({top:0,behavior:'smooth'});return}if(tab.dataset.nav==='appointment'){const card=document.querySelector('#appointment-card');if(card)card.scrollIntoView({behavior:'smooth',block:'center'});else document.querySelector('#appointmentDialog').showModal();return}const card=document.getElementById(`bookmark-${tab.dataset.navBookmark}`);if(card)card.scrollIntoView({behavior:'smooth',block:'start'})});
+    grid.addEventListener('click',e=>{const appointmentButton=e.target.closest('[data-book-appointment]');if(appointmentButton){document.querySelector('#appointmentDialog').showModal();return}const editButton=e.target.closest('[data-edit]');if(editButton){openEditor(editButton.dataset.edit);return}const deleteButton=e.target.closest('[data-delete]');if(deleteButton&&confirm('Delete this resource?')){bookmarks=bookmarks.filter(b=>b.id!==deleteButton.dataset.delete);activeView='home';save();render()}});
+    bottomNav.addEventListener('click',e=>{const tab=e.target.closest('.nav-tab');if(!tab)return;activeView=tab.dataset.nav==='home'?'home':tab.dataset.navBookmark;render();scrollTo({top:0,behavior:'smooth'})});
     editForm.addEventListener('submit',e=>{e.preventDefault();const item=bookmarks.find(b=>b.id===editingId);if(!item)return;item.title=document.querySelector('#editTitle').value.trim();item.url=document.querySelector('#editUrl').value.trim();item.category=document.querySelector('#editCategory').value.trim();item.notes=document.querySelector('#editNotes').value.trim();save();closeEditor();render()});
     document.querySelector('#closeDialog').addEventListener('click',closeEditor);
     document.querySelector('#cancelEdit').addEventListener('click',closeEditor);
